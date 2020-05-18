@@ -67,7 +67,7 @@ where
         let response = actor.handle(self.message.take().unwrap()).await;
         let res_si = self.res_si.take().unwrap();
 
-        if let Err(_) = res_si.send(response) {
+        if res_si.send(response).is_err() {
             log::error!("Could not return response. Dropping");
         }
     }
