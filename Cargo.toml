@@ -1,0 +1,18 @@
+[package]
+name = "actors46"
+version = "0.1.0"
+authors = ["Niclas Rosengren <niclas.rosengren@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.31"
+tokio = { version = "0.2.21", features = [ "sync", "rt-core" ] }
+futures = "0.3.5"
+thiserror = "1.0.18"
+log = "0.4.8"
+
+
+[dev-dependencies]
+tokio = { version = "0.2.21", features = [ "sync", "rt-core", "macros"] }
