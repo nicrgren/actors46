@@ -19,7 +19,7 @@ impl Handler<Square> for Squarer {
 }
 
 #[tokio::test]
-async fn run() {
+async fn simple_add() {
     let mut handle = Squarer.start();
 
     let res = handle

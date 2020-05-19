@@ -10,6 +10,29 @@ where
     type Response: 'static + Send;
 }
 
+pub(crate) trait IntoAddressed
+where
+    Self: Message + Sized,
+{
+    fn address_to<A>(self) -> Box<dyn AddressedMessage<Actor = A>>
+    where
+        A: Actor,
+        A: Handler<Self>;
+}
+
+impl<M> IntoAddressed for M
+where
+    M: Message<Response = ()> + Sized,
+{
+    fn address_to<A>(self) -> Box<dyn AddressedMessage<Actor = A>>
+    where
+        A: Actor,
+        A: Handler<M>,
+    {
+        Box::new(Envelope::wrap(self))
+    }
+}
+
 #[async_trait]
 pub(crate) trait AddressedMessage
 where
@@ -26,10 +49,12 @@ where
     M: Message,
     A: Handler<M>,
 {
-    // This two are optional in order to be able to use take on a &mut ref.
+    // This message is optional in order to be able to use take on a &mut ref.
     // If not, <Envelope as AddressedMessage> would need to be taken by
     // value, which is not possible.
     message: Option<M>,
+
+    // This sink is None when M::Response = ();
     res_si: Option<oneshot::Sender<M::Response>>,
 
     _marker: std::marker::PhantomData<A>,
@@ -41,7 +66,8 @@ where
     M: Message,
     A: Handler<M>,
 {
-    pub(crate) fn wrap(message: M) -> (Self, oneshot::Receiver<M::Response>) {
+    /// Wraps a message together with a response channel that will deliver the message reply.
+    pub(crate) fn wrap_for_response(message: M) -> (Self, oneshot::Receiver<M::Response>) {
         let (res_si, res_st) = oneshot::channel();
         (
             Self {
@@ -51,6 +77,21 @@ where
             },
             res_st,
         )
+    }
+}
+impl<A, M> Envelope<A, M>
+where
+    A: Actor,
+    M: Message<Response = ()>,
+    A: Handler<M>,
+{
+    /// Wraps a message to be delivered to the Actor. Without expecting a reply.
+    pub(crate) fn wrap(message: M) -> Self {
+        Self {
+            message: Some(message),
+            res_si: None,
+            _marker: std::marker::PhantomData,
+        }
     }
 }
 
@@ -65,10 +106,11 @@ where
 
     async fn handle(&mut self, actor: &mut Self::Actor) {
         let response = actor.handle(self.message.take().unwrap()).await;
-        let res_si = self.res_si.take().unwrap();
 
-        if res_si.send(response).is_err() {
-            log::error!("Could not return response. Dropping");
+        if let Some(si) = self.res_si.take() {
+            if si.send(response).is_err() {
+                log::error!("Could not return response. Dropping");
+            }
         }
     }
 }

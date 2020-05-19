@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 
-use crate::{AddressedMessage, Envelope, Error, Message};
+use crate::{AddressedMessage, Handle, Message};
 
 pub trait Actor
 where
@@ -32,34 +32,6 @@ where
     message_st: mpsc::Receiver<Box<dyn AddressedMessage<Actor = A>>>,
 }
 
-pub struct Handle<A>
-where
-    A: Actor,
-{
-    chan: mpsc::Sender<Box<dyn AddressedMessage<Actor = A>>>,
-}
-
-impl<A> Handle<A>
-where
-    A: Actor,
-{
-    pub async fn send<M>(&mut self, message: M) -> Result<M::Response, Error>
-    where
-        M: Message,
-        A: Handler<M>,
-    {
-        let (envelope, res_fut) = Envelope::wrap(message);
-        if let Err(_err) = self.chan.send(Box::new(envelope)).await {
-            return Err(Error::SendFailed);
-        }
-
-        match res_fut.await {
-            Ok(res) => Ok(res),
-            Err(_) => Err(Error::ReceiveFailed),
-        }
-    }
-}
-
 impl<A> Context<A>
 where
     A: Actor,
@@ -68,7 +40,7 @@ where
         let (si, st) = mpsc::channel(1);
 
         let context = Context { message_st: st };
-        let handle = Handle { chan: si };
+        let handle = Handle::new(si);
 
         // @TODO: This join handle could be stored within the ActorSystem.
         // ActorSystem is not yet added.
